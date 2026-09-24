@@ -1,7 +1,7 @@
 """Local server for the Nuke web preview.
 
 Endpoints (all JSON unless noted):
-  GET  /                       -> viewer.html
+  GET  /                       -> index.html (+ nk_parser.js)
   GET  /api/roots              -> configured browse roots
   GET  /api/browse?path=DIR    -> {dirs, files} (.nk files only)
   GET  /api/graph?path=FILE.nk -> parsed graph (cached by mtime)
@@ -95,8 +95,11 @@ class Handler(BaseHTTPRequestHandler):
         route = urlparse(self.path).path
         try:
             if route in ("/", "/viewer.html", "/index.html"):
-                self._send(200, (HERE / "viewer.html").read_bytes(),
+                self._send(200, (HERE / "index.html").read_bytes(),
                            "text/html; charset=utf-8")
+            elif route == "/nk_parser.js":
+                self._send(200, (HERE / "nk_parser.js").read_bytes(),
+                           "application/javascript; charset=utf-8")
             elif route == "/api/roots":
                 self._send(200, {"roots": ROOTS})
             elif route == "/api/browse":

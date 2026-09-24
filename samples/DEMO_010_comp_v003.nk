@@ -1,0 +1,239 @@
+#! C:/Program Files/Nuke15.1v1/nuke-15.1.1.dll -nx
+version 15.1 v1
+Root {
+ inputs 0
+ name C:/shots/DEMO/DEMO_010/comp/DEMO_010_comp_v003.nk
+ frame 1012
+ first_frame 1001
+ last_frame 1048
+ fps 24
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ colorManagement OCIO
+}
+BackdropNode {
+ inputs 0
+ name BD_prep
+ tile_color 0x2b3a2eff
+ label "<Center>Plate prep"
+ note_font_size 50
+ xpos -260
+ ypos -720
+ bdwidth 560
+ bdheight 470
+}
+BackdropNode {
+ inputs 0
+ name BD_key
+ tile_color 0x2a3446ff
+ label "<Center>Key + matte"
+ note_font_size 50
+ xpos -260
+ ypos -220
+ bdwidth 860
+ bdheight 560
+}
+BackdropNode {
+ inputs 0
+ name BD_comp
+ tile_color 0x4a3a2aff
+ label "<Center>Comp"
+ note_font_size 50
+ xpos -260
+ ypos 380
+ bdwidth 860
+ bdheight 520
+}
+BackdropNode {
+ inputs 0
+ name BD_title
+ tile_color 0x202020ff
+ label "<b>\[join \[lrange \[split \[file tail \[file rootname \[value root.name]]] \"_\"] 0 1] \"_\"]</b>\nDEMO shot overview"
+ note_font_size 30
+ xpos 700
+ ypos -720
+ bdwidth 360
+ bdheight 200
+}
+StickyNote {
+ inputs 0
+ name Note_edge
+ label "Check hair edge\nnear frame 1024"
+ note_font_size 22
+ xpos 360
+ ypos -120
+}
+StickyNote {
+ inputs 0
+ name Note_bg
+ label "BG graded to\nmatch plate"
+ note_font_size 18
+ xpos -100
+ ypos 560
+}
+Read {
+ inputs 0
+ file shots/DEMO_010/plate/DEMO_010_plate.####.exr
+ first 1001
+ last 1048
+ colorspace scene_linear
+ name Read_plate
+ xpos 0
+ ypos -660
+}
+Reformat {
+ name Reformat_HD
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ xpos 0
+ ypos -580
+}
+Grade {
+ white 1.05
+ gamma 0.98
+ name Grade_plate
+ xpos 0
+ ypos -500
+}
+Dot {
+ name Dot_plate
+ xpos 34
+ ypos -420
+}
+set Nplate [stack 0]
+Keylight {
+ screenColour {0.05 0.4 0.08}
+ screenGain 1.1
+ screenBalance 0.5
+ clipBlack 0.02
+ clipWhite 0.96
+ despillBias {0.5 0.5 0.5}
+ replaceMode "soft colour"
+ name Keylight_screen
+ xpos 0
+ ypos -160
+}
+FilterErode {
+ size 1.5
+ name Erode_matte
+ xpos 0
+ ypos -80
+}
+Blur {
+ size 1.2
+ name Blur_matte
+ xpos 0
+ ypos 0
+}
+Dot {
+ name Dot_matte
+ xpos 34
+ ypos 80
+}
+set Nmatte [stack 0]
+push $Nplate
+Roto {
+ name Roto_hair
+ xpos 240
+ ypos -160
+}
+push $Nmatte
+Merge2 {
+ inputs 2
+ operation max
+ name Merge_alpha
+ xpos 240
+ ypos 100
+}
+Group {
+ inputs 1
+ name Despill_grp
+ xpos 240
+ ypos 200
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos 0
+  ypos -120
+ }
+ Saturation {
+  saturation 0.85
+  name Saturation_spill
+  xpos 0
+  ypos -40
+ }
+ Grade {
+  gamma 1.02
+  name Grade_spill
+  xpos 0
+  ypos 40
+ }
+ Output {
+  name Output1
+  xpos 0
+  ypos 120
+ }
+end_group
+Premult {
+ name Premult_fg
+ xpos 240
+ ypos 300
+}
+Read {
+ inputs 0
+ file shots/DEMO_010/bg/DEMO_010_bg.####.exr
+ first 1001
+ last 1048
+ colorspace scene_linear
+ name Read_bg
+ xpos 440
+ ypos 240
+}
+Grade {
+ white 0.9
+ name Grade_bg
+ xpos 440
+ ypos 420
+}
+Blur {
+ size 6
+ name Defocus_bg
+ xpos 440
+ ypos 500
+}
+Merge2 {
+ inputs 2
+ name Merge_over
+ xpos 240
+ ypos 580
+}
+ColorCorrect {
+ saturation 1.05
+ name CC_final
+ xpos 240
+ ypos 660
+}
+Grain2 {
+ name Grain_final
+ xpos 240
+ ypos 740
+}
+Dot {
+ name Dot_final
+ xpos 274
+ ypos 820
+}
+set Nfinal [stack 0]
+Write {
+ file shots/DEMO_010/comp/pub/DEMO_010_comp_v003.####.exr
+ file_type exr
+ colorspace scene_linear
+ name Write_out
+ xpos 240
+ ypos 900
+}
+push $Nfinal
+Viewer {
+ name Viewer1
+ xpos 520
+ ypos 900
+}

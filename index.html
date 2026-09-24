@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Nuke script preview</title>
+<link rel="icon" href="data:,">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #1e1e1e;
     font-family: "Segoe UI", "Malgun Gothic", sans-serif; color: #ddd; }
@@ -82,6 +83,8 @@
   #help { position: absolute; bottom: 10px; right: 12px; color: #666;
     font-size: 11px; z-index: 5; text-align: right; }
   canvas { display: block; }
+  body.static #tabVers, body.static #diffBtn, body.static #pathBar { display: none; }
+  #main.drop { outline: 3px dashed #d4a437; outline-offset: -6px; }
 </style>
 </head>
 <body>
@@ -117,6 +120,7 @@
       <button id="undoBtn" title="Ctrl+Z">↶</button>
       <button id="redoBtn" title="Ctrl+Shift+Z">↷</button>
       <button id="nkBtn">.nk 스니펫</button>
+      <button id="exportBtn" style="display:none" title="Nuke 훅이 읽는 사이드카 JSON">주석 JSON 저장</button>
       <span id="saveState"></span>
     </div>
     <div id="tip"></div>
@@ -130,6 +134,7 @@
     <canvas id="cv"></canvas>
   </div>
 </div>
+<script src="nk_parser.js"></script>
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
@@ -142,6 +147,7 @@ let annotMode = false, dragA = null, pendingA = null;
 let A = { state: [], history: [[]], historyIndex: 0 };
 let dirty = false, saveTimer = null;
 let versions = [], diffOn = false, diffData = null;
+let STATIC = false;
 
 const CLASS_COLORS = [
   [/^(Read|Write)/, '#9a5b21'],
@@ -477,17 +483,24 @@ function markDirty() {
   saveTimer = setTimeout(saveAnnots, 700);
   updateUndoBtns();
 }
+function annDoc() {
+  return { state: A.state, history: A.history,
+    historyIndex: A.historyIndex, updated: new Date().toISOString() };
+}
 async function saveAnnots() {
   if (!curPath || !dirty) return;
   dirty = false;
   try {
-    const r = await fetch('/api/annotations?path=' + encodeURIComponent(curPath), {
-      method: 'POST',
-      body: JSON.stringify({ state: A.state, history: A.history,
-        historyIndex: A.historyIndex, updated: new Date().toISOString() }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    $('saveState').textContent = '자동저장됨 ' + new Date().toLocaleTimeString();
+    if (STATIC) {
+      localStorage.setItem('nkAnn:' + curPath, JSON.stringify(annDoc()));
+    } else {
+      const r = await fetch('/api/annotations?path=' + encodeURIComponent(curPath), {
+        method: 'POST', body: JSON.stringify(annDoc()),
+      });
+      if (!r.ok) throw new Error(await r.text());
+    }
+    $('saveState').textContent = (STATIC ? '브라우저에 자동저장됨 ' : '자동저장됨 ') +
+      new Date().toLocaleTimeString();
     $('saveState').className = '';
   } catch (e) {
     $('saveState').textContent = '저장 실패: ' + e.message;
@@ -717,35 +730,107 @@ function addRecent(p) {
   localStorage.setItem('nkRecents', JSON.stringify(rec));
   renderRecents();
 }
+async function fetchAnn(key) {
+  if (STATIC) {
+    try {
+      const s = localStorage.getItem('nkAnn:' + key);
+      if (s) return JSON.parse(s);
+    } catch (e) {}
+    return { state: [], history: [[]], historyIndex: 0 };
+  }
+  return api('/api/annotations?path=' + encodeURIComponent(key));
+}
+async function openGraph(g, key, keepView) {
+  G = g; curPath = key;
+  byId = new Map(G.nodes.map(n => [n.id, n]));
+  byName = new Map(G.nodes.map(n => [n.name, n]));
+  lblCache.clear();
+  closeProps();
+  diffOn = false; diffData = null;
+  $('diffBtn').classList.remove('active');
+  $('diffChip').style.display = 'none';
+  const ann = await fetchAnn(key);
+  A = { state: ann.state || [], history: ann.history || [ann.state || []],
+    historyIndex: ann.historyIndex != null ? ann.historyIndex :
+      (ann.history ? ann.history.length - 1 : 0) };
+  dirty = false;
+  $('saveState').textContent = A.state.length ? '주석 ' + A.state.length + '개 로드됨' : '';
+  $('saveState').className = '';
+  $('title').textContent = g.source;
+  $('stats').textContent = '노드 ' + g.stats.nodes + ' · 연결 ' + g.stats.edges +
+    ' · 백드랍 ' + g.stats.backdrops + ' (전체 ' + g.stats.totalParsed + ' 블록)';
+  if (!keepView) fit(); else draw();
+  updateUndoBtns();
+}
 async function loadScript(path, keepView) {
   try {
     await saveAnnots();
     $('title').textContent = '불러오는 중…';
     const g = await api('/api/graph?path=' + encodeURIComponent(path));
-    G = g; curPath = path;
-    byId = new Map(G.nodes.map(n => [n.id, n]));
-    byName = new Map(G.nodes.map(n => [n.name, n]));
-    lblCache.clear();
-    closeProps();
-    diffOn = false; diffData = null;
-    $('diffBtn').classList.remove('active');
-    $('diffChip').style.display = 'none';
-    const ann = await api('/api/annotations?path=' + encodeURIComponent(path));
-    A = { state: ann.state || [], history: ann.history || [ann.state || []],
-      historyIndex: ann.historyIndex != null ? ann.historyIndex :
-        (ann.history ? ann.history.length - 1 : 0) };
-    dirty = false;
-    $('saveState').textContent = A.state.length ? '주석 ' + A.state.length + '개 로드됨' : '';
-    $('saveState').className = '';
-    $('title').textContent = g.source;
-    $('stats').textContent = '노드 ' + g.stats.nodes + ' · 연결 ' + g.stats.edges +
-      ' · 백드랍 ' + g.stats.backdrops + ' (전체 ' + g.stats.totalParsed + ' 블록)';
+    await openGraph(g, path, keepView);
     addRecent(path);
     loadVersions(path);
-    if (!keepView) fit(); else draw();
-    updateUndoBtns();
     if (curDir) browse(curDir.path);
   } catch (e) { toast('열기 실패: ' + e.message); $('title').textContent = '오류'; }
+}
+
+/* ---------- static mode (GitHub Pages / no server): parse in the browser ---------- */
+const SAMPLES = ['DEMO_010_comp_v003.nk'];
+async function openText(text, name, key) {
+  try {
+    await saveAnnots();
+    $('title').textContent = '불러오는 중…';
+    const g = window.parseNk(text, name);
+    g.path = name;
+    if (!g.stats.nodes && !g.stats.backdrops) throw new Error('노드를 찾지 못했습니다 (.nk 파일이 맞나요?)');
+    await openGraph(g, key);
+    document.querySelectorAll('#fileList .row.nk').forEach(r =>
+      r.classList.toggle('cur', r.dataset.key === key));
+  } catch (e) { toast('열기 실패: ' + e.message); $('title').textContent = '오류'; }
+}
+async function openSample(name) {
+  try {
+    const r = await fetch('samples/' + encodeURIComponent(name));
+    if (!r.ok) throw new Error('샘플을 불러올 수 없습니다 (' + r.status + ')');
+    await openText(await r.text(), name, 'sample:' + name);
+  } catch (e) { toast(e.message); }
+}
+async function openLocalFile(file) {
+  if (!file) return;
+  if (!/\.nk$/i.test(file.name)) { toast('.nk 파일만 열 수 있습니다'); return; }
+  await openText(await file.text(), file.name, 'local:' + file.name + ':' + file.size);
+}
+function setupStatic() {
+  STATIC = true;
+  document.body.classList.add('static');
+  $('exportBtn').style.display = '';
+  const list = $('fileList');
+  list.innerHTML =
+    '<div style="padding:12px"><button id="pickBtn" style="width:100%;padding:9px">내 .nk 파일 열기…</button>' +
+    '<div style="color:#8a8a8a;font-size:11.5px;line-height:1.6;margin-top:8px">' +
+    '창에 .nk 파일을 끌어다 놓아도 됩니다.<br>파일은 업로드되지 않고 이 브라우저 안에서만 처리됩니다.</div></div>' +
+    '<div class="sectionTitle">샘플</div>';
+  for (const s of SAMPLES) {
+    const row = document.createElement('div');
+    row.className = 'row nk'; row.dataset.key = 'sample:' + s;
+    row.innerHTML = '<span class="ic">◆</span>' + esc(s);
+    row.onclick = () => openSample(s);
+    list.appendChild(row);
+  }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.nk'; inp.style.display = 'none';
+  inp.onchange = () => { openLocalFile(inp.files[0]); inp.value = ''; };
+  document.body.appendChild(inp);
+  $('pickBtn').onclick = () => inp.click();
+  const main = $('main');
+  let depth = 0;
+  window.addEventListener('dragenter', e => { e.preventDefault(); depth++; main.classList.add('drop'); });
+  window.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; main.classList.remove('drop'); } });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault(); depth = 0; main.classList.remove('drop');
+    openLocalFile(e.dataTransfer.files[0]);
+  });
 }
 async function loadVersions(path) {
   try {
@@ -833,15 +918,34 @@ function setTab(files) {
 window.addEventListener('resize', resize);
 window.addEventListener('beforeunload', () => { if (dirty) saveAnnots(); });
 
+$('exportBtn').onclick = () => {
+  if (!G) return;
+  const blob = new Blob([JSON.stringify(Object.assign({ script: G.source }, annDoc()), null, 1)],
+    { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = G.source + '.annotations.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('저장됨 — .nk 파일 옆에 두면 Nuke 훅이 백드랍으로 만들어 줍니다');
+};
+
 (async function init() {
   resize();
-  renderRecents();
-  try {
-    const j = await api('/api/roots');
-    if (j.roots.length) browse(j.roots[0]);
-  } catch (e) { toast(e.message); }
-  const qp = new URLSearchParams(location.search).get('path');
-  if (qp) loadScript(qp);
+  let roots = null;
+  const hosted = location.protocol === 'file:' || /\.github\.io$/.test(location.hostname);
+  if (!hosted) {
+    try { roots = (await api('/api/roots')).roots; } catch (e) { roots = null; }
+  }
+  const q = new URLSearchParams(location.search);
+  if (roots) {
+    renderRecents();
+    if (roots.length) browse(roots[0]);
+    if (q.get('path')) loadScript(q.get('path'));
+  } else {
+    setupStatic();
+    openSample(q.get('sample') || SAMPLES[0]);
+  }
 })();
 </script>
 </body>

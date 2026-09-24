@@ -4,4 +4,5 @@ graph.json
 graph.js
 *.annotations.json
 *.png
+!screenshots/*.png
 .playwright-mcp/
