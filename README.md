@@ -2,7 +2,7 @@
 
 Preview the node structure of a Nuke `.nk` script in the browser — no Nuke license needed — and leave supervisor notes that show up as backdrops when the artist opens the script.
 
-**Live demo: https://aprilsode.github.io/nuke-preview-app/** — opens a sample comp; drag your own `.nk` onto the page to view it (parsed locally in your browser, nothing is uploaded).
+**Live demo: aprilsoda.github.io/nuke-preview-app/** — opens a sample comp; drag your own `.nk` onto the page to view it (parsed locally in your browser, nothing is uploaded).
 
 ![Overview with supervisor notes](screenshots/demo_overview.png)
 
