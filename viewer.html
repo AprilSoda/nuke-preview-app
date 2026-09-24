@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Nuke script preview</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1e1e1e;
+    font-family: "Segoe UI", "Malgun Gothic", sans-serif; color: #ddd; }
+  #app { display: flex; height: 100%; }
+  #side { width: 300px; min-width: 300px; background: #2b2b2b;
+    border-right: 1px solid #3d3d3d; display: flex; flex-direction: column;
+    overflow: hidden; }
+  #side.hidden { display: none; }
+  #sideTabs { display: flex; border-bottom: 1px solid #3d3d3d; }
+  #sideTabs div { flex: 1; text-align: center; padding: 9px 0; font-size: 13px;
+    cursor: pointer; color: #999; }
+  #sideTabs div.on { color: #fff; background: #383838;
+    border-bottom: 2px solid #d4a437; }
+  .pane { flex: 1; overflow-y: auto; display: none; }
+  .pane.on { display: block; }
+  #pathBar { display: flex; gap: 4px; padding: 8px; }
+  #pathBar input { flex: 1; background: #1c1c1c; color: #ddd;
+    border: 1px solid #4a4a4a; border-radius: 4px; padding: 5px 8px;
+    font-size: 12px; }
+  .row { display: flex; align-items: center; gap: 7px; padding: 5px 12px;
+    font-size: 12.5px; cursor: pointer; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
+  .row:hover { background: #383838; }
+  .row .ic { color: #b58a2c; width: 14px; text-align: center; flex: none; }
+  .row.nk .ic { color: #6fa8dc; }
+  .row.cur { background: #44412c; color: #ffd24a; }
+  .row .meta { margin-left: auto; color: #777; font-size: 11px; flex: none; }
+  .sectionTitle { padding: 9px 12px 4px; font-size: 11px; color: #888;
+    text-transform: uppercase; letter-spacing: .05em; }
+  button { background: #3a3a3a; color: #ddd; border: 1px solid #555;
+    border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  button:hover { background: #4a4a4a; }
+  button.active { background: #b58a2c; color: #111; border-color: #d4a437; }
+  button:disabled { opacity: .4; cursor: default; }
+  #main { flex: 1; position: relative; overflow: hidden; }
+  #hud { position: absolute; top: 0; left: 0; right: 0; display: flex;
+    align-items: center; gap: 8px; padding: 7px 12px;
+    background: rgba(30,30,30,.93); border-bottom: 1px solid #3a3a3a;
+    font-size: 13px; z-index: 10; flex-wrap: wrap; }
+  #hud b { color: #fff; font-weight: 600; }
+  #hud .stat { color: #9a9a9a; font-size: 12px; }
+  #saveState { font-size: 11.5px; color: #7fbf6f; margin-left: auto; }
+  #saveState.dirty { color: #d4a437; }
+  #diffChip { font-size: 11.5px; padding: 2px 8px; border-radius: 10px;
+    background: #333; display: none; }
+  #diffChip .add { color: #7fdf5f; } #diffChip .del { color: #ef7f6f; }
+  #tip { position: absolute; display: none; background: #111; color: #eee;
+    border: 1px solid #666; border-radius: 4px; padding: 6px 9px;
+    font-size: 12px; pointer-events: none; z-index: 20; max-width: 340px; }
+  #tip .cls { color: #f0b040; } #tip .lbl { color: #8fc76f; }
+  #annotInput { position: absolute; display: none; z-index: 30;
+    background: #111; border: 1.5px solid #f1c40f; border-radius: 4px;
+    color: #eee; padding: 6px 9px; font-size: 13px; width: 300px; }
+  #props { position: absolute; top: 40px; right: 0; bottom: 0; width: 330px;
+    background: #2c2c2c; border-left: 1px solid #3d3d3d; z-index: 8;
+    display: none; flex-direction: column; }
+  #propsHead { padding: 10px 12px; font-size: 14px; font-weight: 600;
+    color: #fff; border-bottom: 1px solid #3d3d3d; display: flex;
+    align-items: center; gap: 8px; }
+  #propsHead .sw { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+  #propsHead .cls { color: #f0b040; font-weight: 400; font-size: 12px; }
+  #propsHead .x { margin-left: auto; cursor: pointer; color: #999;
+    font-size: 16px; padding: 0 4px; }
+  #propsHead .x:hover { color: #fff; }
+  #propsBody { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .krow { display: flex; padding: 4px 12px; font-size: 12px; gap: 10px; }
+  .krow:hover { background: #363636; }
+  .kname { color: #909090; width: 110px; flex: none; text-align: right;
+    overflow: hidden; text-overflow: ellipsis; }
+  .kval { color: #ddd; word-break: break-all; white-space: pre-wrap; }
+  .kval.expr { color: #8fc76f; }
+  .kval.raw { color: #777; font-style: italic; }
+  #toast { position: absolute; bottom: 16px; left: 50%;
+    transform: translateX(-50%); background: #111; color: #ffd24a;
+    padding: 8px 16px; border-radius: 5px; font-size: 12.5px; display: none;
+    z-index: 40; border: 1px solid #555; }
+  #help { position: absolute; bottom: 10px; right: 12px; color: #666;
+    font-size: 11px; z-index: 5; text-align: right; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <div id="sideTabs">
+      <div id="tabFiles" class="on">파일</div>
+      <div id="tabVers">버전</div>
+    </div>
+    <div id="paneFiles" class="pane on">
+      <div id="pathBar">
+        <input id="pathInput" placeholder="폴더 또는 .nk 경로 입력 후 Enter">
+        <button id="upBtn" title="상위 폴더">↑</button>
+      </div>
+      <div id="recents"></div>
+      <div id="fileList"></div>
+    </div>
+    <div id="paneVers" class="pane">
+      <div style="padding:8px 12px">
+        <button id="diffBtn" style="width:100%">이전 버전과 비교</button>
+      </div>
+      <div id="verList"></div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="hud">
+      <button id="sideBtn" title="사이드바">☰</button>
+      <b id="title">파일을 선택하세요</b>
+      <span class="stat" id="stats"></span>
+      <span id="diffChip"></span>
+      <button id="fitBtn" title="F">전체</button>
+      <button id="annotBtn" title="A">주석 모드</button>
+      <button id="undoBtn" title="Ctrl+Z">↶</button>
+      <button id="redoBtn" title="Ctrl+Shift+Z">↷</button>
+      <button id="nkBtn">.nk 스니펫</button>
+      <span id="saveState"></span>
+    </div>
+    <div id="tip"></div>
+    <div id="props">
+      <div id="propsHead"></div>
+      <div id="propsBody"></div>
+    </div>
+    <input id="annotInput" placeholder="슈퍼바이저 노트 입력 후 Enter (Esc 취소)">
+    <div id="toast"></div>
+    <div id="help">휠 줌 · LMB/MMB/Alt 팬 · F 전체 · A 주석 · 주석 더블클릭 수정 · 우클릭 삭제 · Ctrl+Z 되돌리기</div>
+    <canvas id="cv"></canvas>
+  </div>
+</div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+const NW = 80, NH = 20;
+let W, H, scale = 1, ox = 0, oy = 0;
+let G = null, curPath = null, hover = null, selN = null;
+let annotMode = false, dragA = null, pendingA = null;
+let A = { state: [], history: [[]], historyIndex: 0 };
+let dirty = false, saveTimer = null;
+let versions = [], diffOn = false, diffData = null;
+
+const CLASS_COLORS = [
+  [/^(Read|Write)/, '#9a5b21'],
+  [/^(Merge|Keymix|Copy$|Copy\d|Switch|Dissolve|AddMix)/, '#4f6db0'],
+  [/^(Grade|ColorCorrect|HueCorrect|Saturation|Multiply|Gamma|Exposure|OCIO|Colorspace|Toe|ColorLookup|Invert)/, '#2f7fa8'],
+  [/^(Blur|Defocus|Sharpen|Soften|EdgeBlur|Median|Denoise|Glow|God|Convolve|ZDefocus)/, '#b07f2f'],
+  [/^(Roto|RotoPaint|Ramp|Rectangle|Radial|Noise$|Grain|ScannedGrain|Text|Flare)/, '#5d8f3c'],
+  [/^(Transform|Tracker|CornerPin|Stabilize|Reformat|Crop|VectorDistort|SplineWarp|GridWarp|IDistort|LensDistortion|STMap)/, '#8a7440'],
+  [/^(Shuffle|ChannelMerge|Remove$|AddChannels)/, '#7a5ba0'],
+  [/^(Keyer|Primatte|IBK|Keylight|Difference|ChromaKeyer|Despill)/, '#3f8f6f'],
+  [/^(FrameHold|Retime|TimeOffset|TimeWarp|OFlow|Kronos|TimeEcho|FrameRange)/, '#3a8a8a'],
+  [/^(Group|Gizmo|Precomp|LiveGroup)/, '#6d4a4a'],
+  [/^(Viewer)/, '#c8a018'],
+];
+function nodeColor(n) {
+  if (n.color) return n.color;
+  for (const [re, c] of CLASS_COLORS) if (re.test(n.class)) return c;
+  return '#5c5c5c';
+}
+const sx = x => x * scale + ox, sy = y => y * scale + oy;
+const gx = x => (x - ox) / scale, gy = y => (y - oy) / scale;
+
+/* ---------- mini TCL evaluator for DAG label expressions ---------- */
+let byName = new Map();
+function tclResolve(ref) {
+  ref = String(ref).replace(/^\[|\]$/g, '');
+  if (ref.startsWith('root.')) {
+    const k = ref.slice(5);
+    if (k === 'name') return (G.root && G.root.name) || G.path || G.source;
+    if (G.root && k in G.root) return G.root[k];
+    throw 'root knob ' + k;
+  }
+  const dot = ref.lastIndexOf('.');
+  if (dot > 0) {
+    const n = byName.get(ref.slice(0, dot));
+    const k = ref.slice(dot + 1);
+    if (n && n.knobs && k in n.knobs) return unq(n.knobs[k]);
+    if (n && k === 'name') return n.name;
+    throw 'knob ' + ref;
+  }
+  throw 'ref ' + ref;
+}
+function unq(v) {
+  v = String(v).trim();
+  if (v.length >= 2 && v[0] === '"' && v.at(-1) === '"') v = v.slice(1, -1);
+  return v.replace(/\\"/g, '"');
+}
+function tclIdx(list, s) {
+  s = String(s);
+  if (s.startsWith('end')) return list.length - 1 + (parseInt(s.slice(3)) || 0);
+  return parseInt(s);
+}
+function tclWords(s) {
+  const out = []; let i = 0;
+  while (i < s.length) {
+    while (i < s.length && /\s/.test(s[i])) i++;
+    if (i >= s.length) break;
+    let tok = '';
+    if (s[i] === '{') {
+      let d = 0;
+      do { d += s[i] === '{' ? 1 : s[i] === '}' ? -1 : 0; tok += s[i++]; }
+      while (i < s.length && d > 0);
+      out.push(tok.slice(1, -1)); continue;
+    }
+    if (s[i] === '"') {
+      i++;
+      while (i < s.length && s[i] !== '"') tok += s[i++];
+      i++; out.push(tok); continue;
+    }
+    let d = 0;
+    while (i < s.length && (d > 0 || !/\s/.test(s[i]))) {
+      d += s[i] === '[' ? 1 : s[i] === ']' ? -1 : 0;
+      tok += s[i++];
+    }
+    out.push(tok);
+  }
+  return out;
+}
+function tclWord(w) {
+  if (typeof w !== 'string' || !w.includes('[')) return w;
+  if (w[0] === '[' && w.at(-1) === ']') {
+    let d = 0, whole = true;
+    for (let i = 0; i < w.length - 1; i++) {
+      d += w[i] === '[' ? 1 : w[i] === ']' ? -1 : 0;
+      if (d === 0) { whole = false; break; }
+    }
+    if (whole) return tclCmd(w.slice(1, -1));
+  }
+  let out = '', i = 0;
+  while (i < w.length) {
+    if (w[i] === '[') {
+      let d = 1, j = i + 1;
+      while (j < w.length && d > 0) { d += w[j] === '[' ? 1 : w[j] === ']' ? -1 : 0; j++; }
+      out += tclStr(tclCmd(w.slice(i + 1, j - 1))); i = j;
+    } else out += w[i++];
+  }
+  return out;
+}
+const tclStr = v => Array.isArray(v) ? v.join(' ') : String(v);
+function tclCmd(s) {
+  const t = tclWords(s).map(tclWord);
+  const cmd = t[0];
+  if (cmd === 'value' || cmd === 'knob') return tclResolve(t[1]);
+  if (cmd === 'file') {
+    const p = tclStr(t[2]);
+    if (t[1] === 'tail') return p.split(/[\\/]/).pop();
+    if (t[1] === 'rootname') return p.replace(/\.[^./\\]*$/, '');
+    if (t[1] === 'dirname') return p.replace(/[\\/][^\\/]*$/, '') || '/';
+    if (t[1] === 'extension') return (p.match(/\.[^./\\]*$/) || [''])[0];
+    throw 'file ' + t[1];
+  }
+  if (cmd === 'split') {
+    const str = tclStr(t[1]), sep = t.length > 2 ? tclStr(t[2]) : null;
+    if (!sep) return str.split(/\s+/);
+    return str.split(new RegExp('[' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ']'));
+  }
+  if (cmd === 'join') {
+    const l = Array.isArray(t[1]) ? t[1] : tclStr(t[1]).split(/\s+/);
+    return l.join(t.length > 2 ? tclStr(t[2]) : ' ');
+  }
+  if (cmd === 'lindex') {
+    const l = Array.isArray(t[1]) ? t[1] : tclStr(t[1]).split(/\s+/);
+    return l[tclIdx(l, t[2])] ?? '';
+  }
+  if (cmd === 'lrange') {
+    const l = Array.isArray(t[1]) ? t[1] : tclStr(t[1]).split(/\s+/);
+    return l.slice(tclIdx(l, t[2]), tclIdx(l, t[3]) + 1);
+  }
+  if (cmd === 'string') {
+    const v = tclStr(t[2]);
+    if (t[1] === 'toupper') return v.toUpperCase();
+    if (t[1] === 'tolower') return v.toLowerCase();
+    throw 'string ' + t[1];
+  }
+  if (cmd === 'basename') return tclStr(t[1]).split(/[\\/]/).pop();
+  throw 'cmd ' + cmd;
+}
+const lblCache = new Map();
+function evalLabel(raw) {
+  if (!raw) return { ok: true, text: '' };
+  if (lblCache.has(raw)) return lblCache.get(raw);
+  const clean = raw.replace(/\\n/g, '\n').replace(/\\\[/g, '[')
+    .replace(/\\\]/g, ']').replace(/\\\$/g, '$');
+  let res;
+  if (!clean.includes('[')) res = { ok: true, text: clean };
+  else {
+    try { res = { ok: true, text: tclStr(tclWord(clean)), expr: true }; }
+    catch (e) { res = { ok: false, text: clean }; }
+  }
+  lblCache.set(raw, res);
+  return res;
+}
+
+function resize() {
+  const r = $('main').getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  draw();
+}
+function fit() {
+  if (!G) return;
+  const xs = [], ys = [];
+  for (const b of G.backdrops) { xs.push(b.x, b.x + b.w); ys.push(b.y, b.y + b.h); }
+  for (const n of G.nodes) { xs.push(n.x, n.x + NW); ys.push(n.y, n.y + NH); }
+  if (!xs.length) return;
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys);
+  scale = Math.min(W / (x1 - x0 + 200), (H - 50) / (y1 - y0 + 200), 2);
+  ox = W / 2 - (x0 + x1) / 2 * scale;
+  oy = 46 + (H - 46) / 2 - (y0 + y1) / 2 * scale;
+  draw();
+}
+
+let byId = new Map();
+function draw() {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#262626'; ctx.fillRect(0, 0, W, H);
+  if (!G) {
+    ctx.fillStyle = '#555'; ctx.font = '15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('왼쪽에서 .nk 파일을 선택하세요', W / 2, H / 2);
+    ctx.textAlign = 'left';
+    return;
+  }
+  const bds = [...G.backdrops].sort((a, b) => b.w * b.h - a.w * a.h);
+  for (const b of bds) {
+    const x = sx(b.x), y = sy(b.y), w = b.w * scale, h = b.h * scale;
+    if (x + w < 0 || y + h < 0 || x > W || y > H) continue;
+    ctx.fillStyle = (b.color || '#3c3c3c') + '59';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = b.color || '#555'; ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+    const fs = Math.max(9, Math.min((b.fontSize || 20) * scale, h * 0.25));
+    if (fs > 6 && w > 30) {
+      ctx.fillStyle = '#ffffffcc'; ctx.font = fs + 'px sans-serif';
+      const lbl = evalLabel(b.label || b.name).text.split('\n')[0];
+      ctx.fillText(lbl, x + 6, y + fs + 4, w - 12);
+    }
+  }
+  // edges: normal solid, hidden-input / viewer dashed & faint (like Nuke)
+  ctx.lineWidth = Math.max(0.6, 1.1 * scale);
+  for (const pass of [0, 1]) {
+    ctx.beginPath();
+    for (const e of G.edges) {
+      const kind = e[2] || 0;
+      if ((pass === 0) !== (kind === 0)) continue;
+      const na = byId.get(e[0]), nb = byId.get(e[1]);
+      if (!na || !nb) continue;
+      ctx.moveTo(sx(na.x + NW / 2), sy(na.y + NH / 2));
+      ctx.lineTo(sx(nb.x + NW / 2), sy(nb.y + NH / 2));
+    }
+    if (pass === 0) { ctx.strokeStyle = '#8f8f8f'; ctx.setLineDash([]); }
+    else { ctx.strokeStyle = '#5a5a5a'; ctx.setLineDash([5, 6]); }
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  const diffAdd = diffOn && diffData ? diffData.addedIds : null;
+  const showText = scale > 0.28;
+  for (const n of G.nodes) {
+    const x = sx(n.x), y = sy(n.y), w = NW * scale, h = NH * scale;
+    if (x + w < -20 || y + h < -20 || x > W + 20 || y > H + 20) continue;
+    if (n.class === 'Dot') {
+      ctx.fillStyle = '#c9c9c9'; ctx.beginPath();
+      ctx.arc(x + w / 2, y + h / 2, Math.max(2, 6 * scale), 0, 7); ctx.fill();
+      if (diffAdd && diffAdd.has(n.id)) {
+        ctx.strokeStyle = '#7fdf5f'; ctx.lineWidth = 2; ctx.stroke();
+      }
+      continue;
+    }
+    if (n.class === 'StickyNote') {
+      const txt = evalLabel(n.label || '').text || n.name;
+      const fs = Math.max(7, (n.fontSize || 11) * scale);
+      ctx.font = fs + 'px sans-serif';
+      const lines = txt.split('\n');
+      const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+      ctx.fillStyle = '#3a3a3aC0';
+      ctx.fillRect(x - 4, y - 4, tw + 12, lines.length * fs * 1.25 + 8);
+      ctx.fillStyle = '#d9d9d9';
+      lines.forEach((l, li) => ctx.fillText(l, x + 2, y + fs * (li + 1)));
+      if (n === selN) {
+        ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - 4, y - 4, tw + 12, lines.length * fs * 1.25 + 8);
+      }
+      continue;
+    }
+    ctx.fillStyle = nodeColor(n);
+    ctx.fillRect(x, y, w, h);
+    if (diffAdd && diffAdd.has(n.id)) {
+      ctx.strokeStyle = '#7fdf5f'; ctx.lineWidth = 2.5;
+    } else {
+      ctx.strokeStyle = (n === hover || n === selN) ? '#ffd24a' : '#151515';
+      ctx.lineWidth = (n === hover || n === selN) ? 2 : 1;
+    }
+    ctx.strokeRect(x, y, w, h);
+    if (n.children) {
+      ctx.fillStyle = '#ffd24a'; ctx.font = Math.max(8, 9 * scale) + 'px sans-serif';
+      ctx.fillText('+' + n.children, x + w - 22 * scale, y - 2);
+    }
+    if (showText) {
+      ctx.fillStyle = '#f2f2f2';
+      ctx.font = Math.max(7, 9.5 * scale) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(n.name, x + w / 2, y + h / 2, w - 4);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+  }
+  if (diffOn && diffData) {
+    ctx.setLineDash([4, 4]);
+    for (const n of diffData.removed) {
+      const x = sx(n.x), y = sy(n.y), w = NW * scale, h = NH * scale;
+      if (x + w < 0 || y + h < 0 || x > W || y > H) continue;
+      ctx.strokeStyle = '#ef7f6f'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, w, h);
+      if (showText) {
+        ctx.fillStyle = '#ef7f6f88';
+        ctx.font = Math.max(7, 9.5 * scale) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(n.name, x + w / 2, y + h / 2, w - 4);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      }
+    }
+    ctx.setLineDash([]);
+  }
+  for (const a of A.state) drawAnnot(a);
+  if (dragA) drawAnnot(dragA);
+}
+function drawAnnot(a) {
+  const x = sx(a.x), y = sy(a.y), w = a.w * scale, h = a.h * scale;
+  ctx.fillStyle = '#f1c40f22'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 1.6; ctx.setLineDash([7, 5]);
+  ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+  if (a.text) {
+    const fs = Math.max(11, 15 * scale);
+    ctx.font = '600 ' + fs + 'px sans-serif';
+    const tw = ctx.measureText('SUP: ' + a.text).width;
+    ctx.fillStyle = '#f1c40f'; ctx.fillRect(x, y - fs - 8, tw + 12, fs + 8);
+    ctx.fillStyle = '#1a1a1a'; ctx.fillText('SUP: ' + a.text, x + 6, y - 6);
+  }
+}
+
+/* ---------- annotations: history + autosave ---------- */
+function pushHistory() {
+  A.history = A.history.slice(0, A.historyIndex + 1);
+  A.history.push(JSON.parse(JSON.stringify(A.state)));
+  if (A.history.length > 200) A.history.shift();
+  A.historyIndex = A.history.length - 1;
+  markDirty();
+}
+function undo() {
+  if (A.historyIndex > 0) {
+    A.historyIndex--;
+    A.state = JSON.parse(JSON.stringify(A.history[A.historyIndex]));
+    markDirty(); draw(); updateUndoBtns();
+  }
+}
+function redo() {
+  if (A.historyIndex < A.history.length - 1) {
+    A.historyIndex++;
+    A.state = JSON.parse(JSON.stringify(A.history[A.historyIndex]));
+    markDirty(); draw(); updateUndoBtns();
+  }
+}
+function updateUndoBtns() {
+  $('undoBtn').disabled = A.historyIndex <= 0;
+  $('redoBtn').disabled = A.historyIndex >= A.history.length - 1;
+}
+function markDirty() {
+  dirty = true;
+  $('saveState').textContent = '저장 대기중…';
+  $('saveState').className = 'dirty';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveAnnots, 700);
+  updateUndoBtns();
+}
+async function saveAnnots() {
+  if (!curPath || !dirty) return;
+  dirty = false;
+  try {
+    const r = await fetch('/api/annotations?path=' + encodeURIComponent(curPath), {
+      method: 'POST',
+      body: JSON.stringify({ state: A.state, history: A.history,
+        historyIndex: A.historyIndex, updated: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    $('saveState').textContent = '자동저장됨 ' + new Date().toLocaleTimeString();
+    $('saveState').className = '';
+  } catch (e) {
+    $('saveState').textContent = '저장 실패: ' + e.message;
+    $('saveState').className = 'dirty';
+    dirty = true;
+  }
+}
+function annotAt(mx, my) {
+  for (let i = A.state.length - 1; i >= 0; i--) {
+    const a = A.state[i];
+    if (mx >= a.x && mx <= a.x + a.w && my >= a.y && my <= a.y + a.h) return a;
+  }
+  return null;
+}
+function openAnnotInput(a, cx, cy) {
+  pendingA = a;
+  const inp = $('annotInput');
+  inp.style.display = 'block';
+  inp.style.left = Math.min(cx, W - 320) + 'px';
+  inp.style.top = Math.max(cy, 50) + 'px';
+  inp.value = a.text || '';
+  inp.focus();
+}
+$('annotInput').addEventListener('keydown', e => {
+  const inp = $('annotInput');
+  if (e.key === 'Enter') {
+    const t = inp.value.trim();
+    if (t) {
+      pendingA.text = t;
+      if (!A.state.includes(pendingA)) A.state.push(pendingA);
+      pushHistory();
+    }
+    inp.style.display = 'none'; pendingA = null; draw();
+  } else if (e.key === 'Escape') {
+    inp.style.display = 'none'; pendingA = null; draw();
+  }
+  e.stopPropagation();
+});
+
+/* ---------- properties panel ---------- */
+function selectNode(n) {
+  selN = n;
+  $('props').style.display = 'flex';
+  $('propsHead').innerHTML =
+    '<span class="sw" style="background:' + nodeColor(n) + '"></span>' +
+    '<span>' + esc(n.name) + '</span><span class="cls">' + esc(n.class) +
+    (n.children ? ' · 내부 ' + n.children + '개' : '') + '</span>' +
+    '<span class="x" title="닫기 (Esc)">×</span>';
+  $('propsHead').querySelector('.x').onclick = closeProps;
+  const body = $('propsBody');
+  body.innerHTML = '';
+  const add = (k, v, cls) => {
+    const r = document.createElement('div');
+    r.className = 'krow';
+    r.innerHTML = '<span class="kname">' + esc(k) + '</span>' +
+      '<span class="kval ' + (cls || '') + '"></span>';
+    r.querySelector('.kval').textContent = v;
+    body.appendChild(r);
+  };
+  const knobs = n.knobs || {};
+  for (const [k, vRaw] of Object.entries(knobs)) {
+    const v = unq(vRaw);
+    if (v.includes('\\[') || v.includes('[')) {
+      const ev = evalLabel(v);
+      if (ev.ok && ev.expr) { add(k, ev.text, 'expr'); continue; }
+      if (!ev.ok) { add(k, ev.text.split('\n')[0], 'raw'); continue; }
+    }
+    add(k, v.replace(/\\n/g, '\n'));
+  }
+  if (!Object.keys(knobs).length)
+    add('', '기본값 외 설정 없음', 'raw');
+  draw();
+}
+function closeProps() {
+  selN = null;
+  $('props').style.display = 'none';
+  draw();
+}
+
+/* ---------- navigation (Nuke-style) ---------- */
+let panning = false, px = 0, py = 0, downX = 0, downY = 0;
+cv.addEventListener('mousedown', e => {
+  $('annotInput').style.display = 'none';
+  const pan = e.button === 1 || e.altKey || (e.button === 0 && !annotMode);
+  if (e.button === 0 && annotMode) {
+    dragA = { x: gx(e.clientX - sideW()), y: gy(e.clientY), w: 0, h: 0 };
+  } else if (pan) {
+    panning = true;
+  }
+  px = downX = e.clientX; py = downY = e.clientY;
+  if (e.button === 1) e.preventDefault();
+});
+function sideW() { return $('side').classList.contains('hidden') ? 0 : 300; }
+window.addEventListener('mousemove', e => {
+  const cx = e.clientX - sideW(), cy = e.clientY;
+  if (panning) {
+    ox += e.clientX - px; oy += e.clientY - py;
+    px = e.clientX; py = e.clientY; draw(); return;
+  }
+  if (dragA) {
+    dragA.w = gx(cx) - dragA.x; dragA.h = gy(cy) - dragA.y;
+    draw(); return;
+  }
+  if (!G) return;
+  const mx = gx(cx), my = gy(cy);
+  let found = null;
+  for (const n of G.nodes)
+    if (mx >= n.x && mx <= n.x + NW && my >= n.y && my <= n.y + NH) { found = n; break; }
+  if (found !== hover) { hover = found; draw(); }
+  const tip = $('tip');
+  if (found) {
+    tip.style.display = 'block';
+    tip.style.left = (cx + 14) + 'px'; tip.style.top = (cy + 14) + 'px';
+    const lbl = found.label ? evalLabel(found.label).text.split('\n')[0] : '';
+    tip.innerHTML = '<b>' + esc(found.name) + '</b> <span class="cls">' + found.class + '</span>'
+      + (found.children ? ' (내부 ' + found.children + '개)' : '')
+      + (lbl ? '<br><span class="lbl">' + esc(lbl) + '</span>' : '')
+      + (found.file ? '<br><span style="color:#999">…' + esc(found.file) + '</span>' : '')
+      + '<br><span style="color:#777">클릭하면 설정 보기</span>';
+  } else tip.style.display = 'none';
+});
+window.addEventListener('mouseup', e => {
+  panning = false;
+  const clicked = e.button === 0 &&
+    Math.hypot(e.clientX - downX, e.clientY - downY) < 5;
+  if (clicked && !annotMode && !dragA) {
+    if (hover) selectNode(hover); else closeProps();
+  }
+  if (dragA) {
+    const a = dragA; dragA = null;
+    if (Math.abs(a.w) > 8 && Math.abs(a.h) > 8) {
+      if (a.w < 0) { a.x += a.w; a.w = -a.w; }
+      if (a.h < 0) { a.y += a.h; a.h = -a.h; }
+      a.ts = Date.now();
+      openAnnotInput(a, e.clientX - sideW(), e.clientY);
+      A.state.push(a);  // show while typing; removed if cancelled
+      const idx = A.state.length - 1;
+      const cleanup = () => { if (!a.text) A.state.splice(idx, 1); };
+      $('annotInput').addEventListener('blur', cleanup, { once: true });
+    }
+    draw();
+  }
+});
+cv.addEventListener('dblclick', e => {
+  const a = annotAt(gx(e.clientX - sideW()), gy(e.clientY));
+  if (a) openAnnotInput(a, e.clientX - sideW(), e.clientY);
+});
+cv.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const a = annotAt(gx(e.clientX - sideW()), gy(e.clientY));
+  if (a) { A.state.splice(A.state.indexOf(a), 1); pushHistory(); draw(); }
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const cx = e.clientX - sideW(), cy = e.clientY;
+  const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  ox = cx - (cx - ox) * f; oy = cy - (cy - oy) * f;
+  scale *= f; draw();
+}, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Escape') closeProps();
+  else if (e.key === 'f' || e.key === 'F') fit();
+  else if (e.key === 'a' || e.key === 'A') toggleAnnot();
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'Z' && e.shiftKey) || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+});
+
+/* ---------- file browser / versions / loading ---------- */
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2600);
+}
+async function api(url) {
+  const r = await fetch(url);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+let curDir = null;
+async function browse(path) {
+  try {
+    const j = await api('/api/browse?path=' + encodeURIComponent(path || ''));
+    curDir = j;
+    $('pathInput').value = j.path;
+    const list = $('fileList');
+    list.innerHTML = '';
+    for (const d of j.dirs) {
+      const el = document.createElement('div');
+      el.className = 'row';
+      el.innerHTML = '<span class="ic">▸</span>' + esc(d.name);
+      el.onclick = () => browse(d.path);
+      list.appendChild(el);
+    }
+    for (const f of j.files) {
+      const el = document.createElement('div');
+      el.className = 'row nk' + (f.path === curPath ? ' cur' : '');
+      el.innerHTML = '<span class="ic">◆</span>' + esc(f.name) +
+        '<span class="meta">' + (f.size / 1048576).toFixed(1) + 'MB</span>';
+      el.onclick = () => loadScript(f.path);
+      list.appendChild(el);
+    }
+    if (!j.dirs.length && !j.files.length)
+      list.innerHTML = '<div class="row" style="color:#777">(비어 있음)</div>';
+  } catch (e) { toast(e.message); }
+}
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+}
+function renderRecents() {
+  const rec = JSON.parse(localStorage.getItem('nkRecents') || '[]');
+  const el = $('recents');
+  el.innerHTML = rec.length ? '<div class="sectionTitle">최근 파일</div>' : '';
+  for (const p of rec) {
+    const row = document.createElement('div');
+    row.className = 'row nk' + (p === curPath ? ' cur' : '');
+    row.title = p;
+    row.innerHTML = '<span class="ic">◆</span>' + esc(p.split(/[\\/]/).pop());
+    row.onclick = () => loadScript(p);
+    el.appendChild(row);
+  }
+}
+function addRecent(p) {
+  let rec = JSON.parse(localStorage.getItem('nkRecents') || '[]');
+  rec = [p, ...rec.filter(x => x !== p)].slice(0, 10);
+  localStorage.setItem('nkRecents', JSON.stringify(rec));
+  renderRecents();
+}
+async function loadScript(path, keepView) {
+  try {
+    await saveAnnots();
+    $('title').textContent = '불러오는 중…';
+    const g = await api('/api/graph?path=' + encodeURIComponent(path));
+    G = g; curPath = path;
+    byId = new Map(G.nodes.map(n => [n.id, n]));
+    byName = new Map(G.nodes.map(n => [n.name, n]));
+    lblCache.clear();
+    closeProps();
+    diffOn = false; diffData = null;
+    $('diffBtn').classList.remove('active');
+    $('diffChip').style.display = 'none';
+    const ann = await api('/api/annotations?path=' + encodeURIComponent(path));
+    A = { state: ann.state || [], history: ann.history || [ann.state || []],
+      historyIndex: ann.historyIndex != null ? ann.historyIndex :
+        (ann.history ? ann.history.length - 1 : 0) };
+    dirty = false;
+    $('saveState').textContent = A.state.length ? '주석 ' + A.state.length + '개 로드됨' : '';
+    $('saveState').className = '';
+    $('title').textContent = g.source;
+    $('stats').textContent = '노드 ' + g.stats.nodes + ' · 연결 ' + g.stats.edges +
+      ' · 백드랍 ' + g.stats.backdrops + ' (전체 ' + g.stats.totalParsed + ' 블록)';
+    addRecent(path);
+    loadVersions(path);
+    if (!keepView) fit(); else draw();
+    updateUndoBtns();
+    if (curDir) browse(curDir.path);
+  } catch (e) { toast('열기 실패: ' + e.message); $('title').textContent = '오류'; }
+}
+async function loadVersions(path) {
+  try {
+    const j = await api('/api/versions?path=' + encodeURIComponent(path));
+    versions = j.versions;
+    const el = $('verList');
+    el.innerHTML = '<div class="sectionTitle">버전 ' + versions.length + '개</div>';
+    for (const v of [...versions].reverse()) {
+      const row = document.createElement('div');
+      row.className = 'row nk' + (v.path === curPath ? ' cur' : '');
+      const d = new Date(v.mtime * 1000);
+      row.innerHTML = '<span class="ic">◆</span>' + esc(v.name) +
+        '<span class="meta">' + (d.getMonth() + 1) + '/' + d.getDate() + '</span>';
+      row.onclick = () => loadScript(v.path, true);
+      el.appendChild(row);
+    }
+  } catch (e) { toast(e.message); }
+}
+async function toggleDiff() {
+  if (diffOn) {
+    diffOn = false; diffData = null;
+    $('diffBtn').classList.remove('active');
+    $('diffChip').style.display = 'none';
+    draw(); return;
+  }
+  const i = versions.findIndex(v => v.path === curPath);
+  if (i <= 0) { toast('비교할 이전 버전이 없습니다'); return; }
+  try {
+    const prev = await api('/api/graph?path=' + encodeURIComponent(versions[i - 1].path));
+    const pNames = new Map(prev.nodes.map(n => [n.name, n]));
+    const cNames = new Set(G.nodes.map(n => n.name));
+    diffData = {
+      addedIds: new Set(G.nodes.filter(n => !pNames.has(n.name)).map(n => n.id)),
+      removed: prev.nodes.filter(n => !cNames.has(n.name)),
+      prevName: versions[i - 1].name,
+    };
+    diffOn = true;
+    $('diffBtn').classList.add('active');
+    const chip = $('diffChip');
+    chip.style.display = 'inline-block';
+    chip.innerHTML = 'vs ' + esc(diffData.prevName) + ' <span class="add">+' +
+      diffData.addedIds.size + '</span> <span class="del">−' +
+      diffData.removed.length + '</span>';
+    draw();
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------- HUD wiring ---------- */
+function toggleAnnot() {
+  annotMode = !annotMode;
+  $('annotBtn').classList.toggle('active', annotMode);
+  cv.style.cursor = annotMode ? 'crosshair' : 'default';
+}
+$('annotBtn').onclick = toggleAnnot;
+$('fitBtn').onclick = fit;
+$('undoBtn').onclick = undo;
+$('redoBtn').onclick = redo;
+$('diffBtn').onclick = toggleDiff;
+$('sideBtn').onclick = () => { $('side').classList.toggle('hidden'); resize(); };
+$('upBtn').onclick = () => { if (curDir && curDir.parent) browse(curDir.parent); };
+$('pathInput').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const p = e.target.value.trim().replace(/^"|"$/g, '');
+  if (p.toLowerCase().endsWith('.nk')) loadScript(p); else browse(p);
+});
+$('nkBtn').onclick = () => {
+  if (!A.state.length) { toast('주석이 없습니다'); return; }
+  const s = A.state.map((a, i) =>
+    'BackdropNode {\n inputs 0\n name SUP_note' + (i + 1) +
+    '\n tile_color 0xf1c40fff\n label "SUP: ' + a.text + '"\n note_font_size 30' +
+    '\n xpos ' + Math.round(a.x) + '\n ypos ' + Math.round(a.y) +
+    '\n bdwidth ' + Math.round(a.w) + '\n bdheight ' + Math.round(a.h) +
+    '\n z_order 10\n}').join('\n');
+  navigator.clipboard.writeText(s);
+  toast('복사됨 — Nuke DAG에 붙여넣으면 백드랍 생성 (훅 설치 시 자동)');
+};
+$('tabFiles').onclick = () => setTab(true);
+$('tabVers').onclick = () => setTab(false);
+function setTab(files) {
+  $('tabFiles').classList.toggle('on', files);
+  $('tabVers').classList.toggle('on', !files);
+  $('paneFiles').classList.toggle('on', files);
+  $('paneVers').classList.toggle('on', !files);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('beforeunload', () => { if (dirty) saveAnnots(); });
+
+(async function init() {
+  resize();
+  renderRecents();
+  try {
+    const j = await api('/api/roots');
+    if (j.roots.length) browse(j.roots[0]);
+  } catch (e) { toast(e.message); }
+  const qp = new URLSearchParams(location.search).get('path');
+  if (qp) loadScript(qp);
+})();
+</script>
+</body>
+</html>

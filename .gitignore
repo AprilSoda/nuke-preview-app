@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+graph.json
+graph.js
+*.annotations.json
+*.png
+.playwright-mcp/
